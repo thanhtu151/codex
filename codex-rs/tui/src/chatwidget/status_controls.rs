@@ -447,8 +447,11 @@ impl ChatWidget {
         label: &str,
     ) -> Option<String> {
         let window = window?;
-        let remaining = (100.0f64 - window.used_percent).clamp(0.0f64, 100.0f64);
-        Some(format!("{label} {remaining:.0}% left"))
+        Some(format_status_line_limit(
+            window,
+            label,
+            chrono::Local::now().date_naive(),
+        ))
     }
 
     pub(super) fn status_line_reasoning_effort_label(
@@ -458,5 +461,69 @@ impl ChatWidget {
             None | Some(ReasoningEffortConfig::None) => "default".to_string(),
             Some(effort) => effort.as_str().to_string(),
         }
+    }
+}
+
+fn format_status_line_limit(
+    window: &RateLimitWindowDisplay,
+    label: &str,
+    local_date: chrono::NaiveDate,
+) -> String {
+    let remaining = (100.0f64 - window.used_percent).clamp(0.0f64, 100.0f64);
+    let base = format!("{label} {remaining:.0}% left");
+    let Some(resets_at) = window.resets_at.as_deref() else {
+        return base;
+    };
+    let resets_at = if resets_at.contains(" on ") {
+        resets_at.to_string()
+    } else {
+        format!("{resets_at} on {}", local_date.format("%-d %b"))
+    };
+    format!("{base} (reset {resets_at})")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn window(used_percent: f64, resets_at: Option<&str>) -> RateLimitWindowDisplay {
+        RateLimitWindowDisplay {
+            used_percent,
+            resets_at: resets_at.map(str::to_string),
+            window_minutes: Some(300),
+        }
+    }
+
+    #[test]
+    fn status_line_limit_adds_local_date_to_same_day_reset() {
+        let text = format_status_line_limit(
+            &window(3.0, Some("21:30")),
+            "5h",
+            chrono::NaiveDate::from_ymd_opt(2026, 9, 25).unwrap(),
+        );
+
+        assert_eq!(text, "5h 97% left (reset 21:30 on 25 Sep)");
+    }
+
+    #[test]
+    fn status_line_limit_preserves_cross_day_reset_date() {
+        let text = format_status_line_limit(
+            &window(1.0, Some("08:00 on 30 Sep")),
+            "weekly",
+            chrono::NaiveDate::from_ymd_opt(2026, 9, 25).unwrap(),
+        );
+
+        assert_eq!(text, "weekly 99% left (reset 08:00 on 30 Sep)");
+    }
+
+    #[test]
+    fn status_line_limit_falls_back_when_reset_is_unknown() {
+        let text = format_status_line_limit(
+            &window(10.0, None),
+            "5h",
+            chrono::NaiveDate::from_ymd_opt(2026, 9, 25).unwrap(),
+        );
+
+        assert_eq!(text, "5h 90% left");
     }
 }
