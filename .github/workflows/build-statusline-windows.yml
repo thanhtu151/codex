@@ -1,0 +1,34 @@
+name: Build patched Codex for Windows
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - statusline-reset-time
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 90
+    defaults:
+      run:
+        working-directory: codex-rs
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: codex-rs
+      - name: Test status-line reset formatting
+        run: cargo test -p codex-tui status_line_limit_ --lib
+      - name: Build Codex CLI
+        run: cargo build -p codex-cli --bin codex --release
+      - name: Upload Windows executable
+        uses: actions/upload-artifact@v4
+        with:
+          name: codex-windows-statusline-reset
+          path: codex-rs/target/release/codex.exe
+          if-no-files-found: error
