@@ -25,10 +25,10 @@ jobs:
       - name: Test status-line reset formatting
         run: cargo test -p codex-tui status_line_limit_ --lib
       - name: Build Codex CLI
-        run: cargo build -p codex-cli --bin codex --release
+        run: cargo build -p codex-cli --bin codex
       - name: Upload Windows executable
         uses: actions/upload-artifact@v4
         with:
           name: codex-windows-statusline-reset
-          path: codex-rs/target/release/codex.exe
+          path: codex-rs/target/debug/codex.exe
           if-no-files-found: error
